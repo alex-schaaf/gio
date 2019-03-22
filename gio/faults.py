@@ -1,7 +1,7 @@
 import pandas as pd
 
 
-def read_fault_sticks_kingdom(fp:str, formation=None):
+def read_kingdom(fp:str, formation=None):
     """
     Reads in Kingdom fault stick files (kingdom) exported from Petrel (tested
     with Petrel 2017) and returns pandas DataFrame.
@@ -35,7 +35,7 @@ def read_fault_sticks_kingdom(fp:str, formation=None):
     return df
 
 
-def read_fault_sticks_charisma(fp:str, formation=None):
+def read_charisma(fp:str, formation=None):
     """
     Reads in charisma fault stick files exported from Petrel (tested with
     Petrel 2017) and returns pandas DataFrame.

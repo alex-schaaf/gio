@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 
-def read_cps3_grid(fp:str, drop_empty:bool=True, return_grid:bool=False):
+def read_cps3(fp:str, drop_empty:bool=True, return_grid:bool=False):
     """Read CPS-3 gridded regular surface files exported by Petrel 2017 and
     returns a Pandas DataFrame.
 
