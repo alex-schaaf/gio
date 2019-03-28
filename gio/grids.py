@@ -60,3 +60,37 @@ def read_cps3(fp:str, drop_empty:bool=True, return_grid:bool=False):
     df["Z"] = g[2, :]
 
     return df
+
+
+def read_earth_vision_grid(fp:str,
+                           surface:str=None,
+                           preserve_colrow:bool=False,
+                           group:str=None):
+    """
+    Reads Earth Vision Grid files exported by Petrel into GemPy Interfaces-compatible DataFrame.
+
+    Args:
+        fp (str): Filepath, e.g. "/surfaces/layer1"
+        surface (str): Formation name, Default None
+        preserve_colrow (bool): If True preserves row and column values saved in the Earth Vision Grid file. Default False
+        group (str): If given creates columns with a group name (useful to later identification of formation subsets). Default None
+
+    Returns:
+        pandas.DataFrame
+    """
+    df = pd.read_csv(fp, skiprows=20, header=None, delim_whitespace=True)
+    df.columns = "X Y Z col row".split()
+
+    if not surface:
+        surface = fp.split("/")[-1]  # take filename
+
+    df["surface"] = surface
+
+    if not preserve_colrow:
+        df.drop('col', axis=1, inplace=True)
+        df.drop('row', axis=1, inplace=True)
+
+    if group:
+        df["group"] = group
+
+    return df
