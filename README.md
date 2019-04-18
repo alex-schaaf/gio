@@ -9,3 +9,4 @@
 
 * CPS-3 grid `gio.grids.read_cps3()`
 * Earth Vision grid `gio.grids.read_earth_vision_grid()`
+* Irap Classic grid `gio.grids.read_irap_classic_grid()`
