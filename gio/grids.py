@@ -11,7 +11,7 @@ def read_irap_classic_grid(fp):
     Returns:
         (np.ndarray): Points array [n, 3] ([n, (x, y, z)])
     """
-    with open(filepath, "r") as file:  # opens the file at given filepath
+    with open(fp, "r") as file:  # opens the file at given filepath
         lines = [line.rstrip("\n") for line in file.readlines()]
 
     file_header = lines[:4]
@@ -121,7 +121,7 @@ def read_earth_vision_grid(fp:str,
     if not surface:
         surface = fp.split("/")[-1]  # take filename
 
-    df["surface"] = surface
+    df["formation"] = surface
 
     if not preserve_colrow:
         df.drop('col', axis=1, inplace=True)
