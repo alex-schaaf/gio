@@ -1,9 +1,12 @@
 import numpy as np
 import pandas as pd
 from nptyping import Array
+from typing import Tuple, Iterable
+import pyvista as pv
+import mplstereonet
 
 
-def read_irap_classic_grid(fp):
+def read_irap_classic_grid(fp: str) -> Array[float, ..., 3]:
     """
     Read Petrel Irap Classic grid files into points array
     Arguments:
@@ -41,7 +44,8 @@ def read_irap_classic_grid(fp):
     return points[boolean_filter, :]
 
 
-def read_cps3(fp: str, drop_empty: bool = True, return_grid: bool = False):
+def read_cps3(fp: str, drop_empty: bool = True,
+              return_grid: bool = False) -> pd.DataFrame:
     """Read CPS-3 gridded regular surface files exported by Petrel 2017 and
     returns a Pandas DataFrame.
 
@@ -138,29 +142,40 @@ def read_earth_vision_grid(fp: str,
     return df
 
 
-def get_orient(vertices, simplices) -> tuple:
-    """Calculates triangle centroids and normal vector from given simplices and
-    points.
-
+def get_orient(vertices: Array[float, ..., 3],
+               simplices: Array[int, ..., 3],
+               extent: Iterable[float] = None) -> Tuple[Array, Array]:
+    """Get centroids and normal vectors of given triangles.
+    
     Args:
-        simplices (np.ndarray): Array (n, 3) containing indices of trianges.
-        vertices (np.ndarray): [description]
-
+        vertices (Array[float, ..., 3]): Vertices of triangular mesh.
+        simplices (Array[int, ..., 3]): Simplices of triangular mesh.
+        extent (Iterable[float], optional): Dimensional extent for 
+            normalization. Defaults to None.
+    
     Returns:
-        tuple: [0] triangle normals Array (n,3) and [1] triangle centroids
-            (n,3)
+        Tuple[Array, Array]: [0] triangle centroid Array (n,3) and [1] triangle
+            normal Array (n,3).
     """
     normals = []
     centroids = []
-    for tri in simplices:
-        normal = np.cross(vertices[tri[1]] - vertices[tri[0]],
-                          vertices[tri[2]] - vertices[tri[0]])
-        normals.append(normal)
 
-        centroid = np.average(vertices[tri, :], axis=0)
+    # normalized vertices along each axis
+    vertices_norm = vertices / np.max(vertices, axis=0)
+
+    for tri in simplices:
+        # normal vector of triangle
+        U = vertices_norm[tri[1]] - vertices_norm[tri[0]]
+        V = vertices_norm[tri[2]] - vertices_norm[tri[0]]
+        Nx = U[1] * V[2] - U[2] * V[1]
+        Ny = U[2] * V[0] - U[0] * V[2]
+        Nz = U[0] * V[1] - U[1] * V[0]
+        normals.append([Nx, Ny, Nz])
+        # centroid of triangle
+        centroid = np.mean(vertices[tri, :], axis=0)
         centroids.append(centroid)
 
-    return np.array(normals), np.array(centroids)
+    return np.array(centroids), np.array(normals)
 
 
 def alpha_shape(points: Array[float, ..., 2], alpha: float,
@@ -184,7 +199,7 @@ def alpha_shape(points: Array[float, ..., 2], alpha: float,
 
     assert points.shape[0] > 3, "Need at least four points"
 
-    def add_edge(edges, i, j):
+    def add_edge(edges: set, i: int, j: int) -> None:
         """
         Add a line between the i-th and j-th points,
         if not in the list already
@@ -250,27 +265,97 @@ def is_inside(x: float,
     return (intersection_counter % 2) != 0
 
 
-def triangulate_surf(points: Array[float, ..., 3], alpha: float):
+def triangulate_surf(points: Array[float, ..., 3],
+                     alpha: float,
+                     view: str = "z"):
     """Triangulate surface using Delaunay triangulation
-    
+
     Args:
         points (Array[float, ..., 3]): Points to be triangulated.
         alpha (float): Alpha shape parameter.
-    
+
     Returns:
         tuple: Vertices Array[float, ..., 3], Simplices Array[int, ..., 3]
     """
     from scipy.spatial import Delaunay
 
-    tri = Delaunay(points[:, :2])
-    tri.normals, tri.centroids = get_orient(points, tri.simplices)
-    if alpha is not None:
-        edges = alpha_shape(points[:, :2], alpha)
-        filter_ = np.array([
-            is_inside(c[0], c[1], points[:, :2], edges) for c in tri.centroids
-        ])
-    #     return points, tri.points, tri.simplices[filter_]
+    slice_, inv_slice = {
+        "z": ([0, 1], 2),
+        "x": ([1, 2], 0),
+        "y": ([0, 2], 1)
+    }[view]
+
+    tri = Delaunay(points[:, slice_])
+    if alpha is None:
+        return tri.points, tri.simplices
+
+    tri.centroids = []
+    for triangle in tri.simplices:
+        centroid = np.mean(tri.points[triangle], axis=0)
+        tri.centroids.append(centroid)
+
+    edges = alpha_shape(points[:, slice_], alpha)
+    filter_ = np.array([
+        is_inside(c[0], c[1], points[:, slice_], edges) for c in tri.centroids
+    ])
+
     return (
-        np.concatenate((tri.points, points[:, 2][:, np.newaxis]), axis=1),
+        np.concatenate((tri.points, points[:, inv_slice][:, np.newaxis]),
+                       axis=1),
         tri.simplices[filter_],
     )
+
+
+def get_gempy_data_from_surfpoints(points: np.ndarray,
+                                   formation: str = None,
+                                   decimate: float = None) -> tuple:
+    """
+
+    Args:
+        points(np.ndarray): Point x,y,z coordinates of shape (:, 3).
+        formation(str, optional): Formation name. Default: None.
+        decimate(float, optional: percentage of triangles to decimate from
+            original shape. Default: None.
+
+    Returns:
+        (pd.DataFrame, pd.DataFrame) Surface Points and Orientations for GemPy.
+    """
+    surfp_columns = "X Y Z formation".split()
+    orient_columns = "X Y Z G_x G_y G_z dip azimuth polarity formation".split()
+
+    surface_points = pd.DataFrame(columns=surfp_columns)
+    surface_points["X"] = points[:, 0]
+    surface_points["Y"] = points[:, 1]
+    surface_points["Z"] = points[:, 2]
+    surface_points["formation"] = formation
+
+    orientations = pd.DataFrame(columns=orient_columns)
+
+    pointcloud = pv.PolyData(points)
+    trisurf = pointcloud.delaunay_2d()
+    if decimate:
+        trisurf = trisurf.decimate_pro(decimate)
+        pointcloud = pv.PolyData(trisurf.points)
+
+    simplices = np.array(
+        [trisurf.faces[1 + i * 4:4 + i * 4] for i in range(trisurf.n_faces)])
+    face_centroids = pv.PolyData(np.mean(trisurf.points[simplices],
+                                         axis=1)).points
+
+    orientations["X"] = face_centroids[:, 0]
+    orientations["Y"] = face_centroids[:, 1]
+    orientations["Z"] = face_centroids[:, 2]
+    orientations["G_x"] = trisurf.face_normals[:, 0]
+    orientations["G_y"] = trisurf.face_normals[:, 1]
+    orientations["G_z"] = trisurf.face_normals[:, 2]
+
+    strike, dip = mplstereonet.vector2pole(trisurf.face_normals[:, 0],
+                                           trisurf.face_normals[:, 1],
+                                           trisurf.face_normals[:, 2])
+
+    orientations["dip"] = dip
+    orientations["azimuth"] = strike
+    orientations["polarity"] = 1
+    orientations["formation"] = formation
+
+    return surface_points, orientations
