@@ -309,9 +309,11 @@ def triangulate_surf(points: Array[float, ..., 3],
 def get_gempy_data_from_surfpoints(points: np.ndarray,
                                    formation: str = None,
                                    group:str = None,
-                                   decimate: float = None,
                                    face_normals=False) -> tuple:
-    """
+    """Turn given surface points array into GemPy input data DataFrames.
+    Uses Delaunay triangulation create a triangulated surface from the
+    data points. Point or face normals are then used as orientation data
+    to populate the orientations dataframe.
 
     Args:
         points(np.ndarray): Point x,y,z coordinates of shape (:, 3).
@@ -335,10 +337,6 @@ def get_gempy_data_from_surfpoints(points: np.ndarray,
 
     pointcloud = pv.PolyData(points)
     trisurf = pointcloud.delaunay_2d()
-
-    if decimate:
-        trisurf = trisurf.decimate_pro(decimate)
-        pointcloud = pv.PolyData(trisurf.points)
 
     if face_normals:
         simplices = np.array(
