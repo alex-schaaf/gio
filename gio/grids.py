@@ -308,7 +308,9 @@ def triangulate_surf(points: Array[float, ..., 3],
 
 def get_gempy_data_from_surfpoints(points: np.ndarray,
                                    formation: str = None,
-                                   decimate: float = None) -> tuple:
+                                   group:str = None,
+                                   decimate: float = None,
+                                   face_normals=False) -> tuple:
     """
 
     Args:
@@ -333,29 +335,43 @@ def get_gempy_data_from_surfpoints(points: np.ndarray,
 
     pointcloud = pv.PolyData(points)
     trisurf = pointcloud.delaunay_2d()
+
     if decimate:
         trisurf = trisurf.decimate_pro(decimate)
         pointcloud = pv.PolyData(trisurf.points)
 
-    simplices = np.array(
-        [trisurf.faces[1 + i * 4:4 + i * 4] for i in range(trisurf.n_faces)])
-    face_centroids = pv.PolyData(np.mean(trisurf.points[simplices],
-                                         axis=1)).points
+    if face_normals:
+        simplices = np.array(
+            [trisurf.faces[1 + i * 4:4 + i * 4] \
+             for i in range(trisurf.n_faces)])
+        points = pv.PolyData(np.mean(trisurf.points[simplices],
+                                            axis=1)).points
 
-    orientations["X"] = face_centroids[:, 0]
-    orientations["Y"] = face_centroids[:, 1]
-    orientations["Z"] = face_centroids[:, 2]
-    orientations["G_x"] = trisurf.face_normals[:, 0]
-    orientations["G_y"] = trisurf.face_normals[:, 1]
-    orientations["G_z"] = trisurf.face_normals[:, 2]
+        normals = trisurf.face_normals
+    else:
+        points = trisurf.points
+        normals = trisurf.point_normals
 
-    strike, dip = mplstereonet.vector2pole(trisurf.face_normals[:, 0],
-                                           trisurf.face_normals[:, 1],
-                                           trisurf.face_normals[:, 2])
+    orientations["X"] = points[:, 0]
+    orientations["Y"] = points[:, 1]
+    orientations["Z"] = points[:, 2]
+    orientations["G_x"] = normals[:, 0]
+    orientations["G_y"] = normals[:, 1]
+    orientations["G_z"] = normals[:, 2]
+
+    strike, dip = mplstereonet.vector2pole(
+        trisurf.point_normals[:, 0],
+        trisurf.point_normals[:, 1],
+        trisurf.point_normals[:, 2]
+    )
 
     orientations["dip"] = dip
     orientations["azimuth"] = strike
     orientations["polarity"] = 1
     orientations["formation"] = formation
+
+    if group:
+        orientations["group"] = group 
+        surface_points["group"] = group 
 
     return surface_points, orientations
