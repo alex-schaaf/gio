@@ -309,7 +309,8 @@ def triangulate_surf(points: Array[float, ..., 3],
 def get_gempy_data_from_surfpoints(points: np.ndarray,
                                    formation: str = None,
                                    group:str = None,
-                                   face_normals=False) -> tuple:
+                                   face_normals=False,
+                                   polarity=-1) -> tuple:
     """Turn given surface points array into GemPy input data DataFrames.
     Uses Delaunay triangulation create a triangulated surface from the
     data points. Point or face normals are then used as orientation data
@@ -325,7 +326,7 @@ def get_gempy_data_from_surfpoints(points: np.ndarray,
         (pd.DataFrame, pd.DataFrame) Surface Points and Orientations for GemPy.
     """
     surfp_columns = "X Y Z formation".split()
-    orient_columns = "X Y Z G_x G_y G_z dip azimuth polarity formation".split()
+    orient_columns = "X Y Z G_x G_y G_z formation".split()  # dip azimuth polarity 
 
     surface_points = pd.DataFrame(columns=surfp_columns)
     surface_points["X"] = points[:, 0]
@@ -363,9 +364,9 @@ def get_gempy_data_from_surfpoints(points: np.ndarray,
         trisurf.point_normals[:, 2]
     )
 
-    orientations["dip"] = dip
-    orientations["azimuth"] = strike
-    orientations["polarity"] = 1
+    # orientations["dip"] = dip
+    # orientations["azimuth"] = strike
+    orientations["polarity"] = polarity
     orientations["formation"] = formation
 
     if group:
